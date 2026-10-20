@@ -10,12 +10,15 @@ GuiManager& GuiManager::instance() {
 GuiManager::GuiManager() 
     : u8g2(U8G2_R0, PIN_OLED_SCL, PIN_OLED_SDA, PIN_OLED_RST),
       current_screen(SCREEN_DASHBOARD),
+      is_powered(true),
       last_frame_time(0) {}
 
 void GuiManager::init() {
     Serial.println("[GUI] Initializing OLED display via U8g2...");
     u8g2.begin();
     u8g2.enableUTF8Print();
+    is_powered = true;
+    BoardHAL::instance().setOledPowered(true);
 
     Serial.println("[GUI] Drawing splash screen...");
     u8g2.clearBuffer();
@@ -30,6 +33,10 @@ void GuiManager::init() {
 }
 
 void GuiManager::nextScreen() {
+    if (!is_powered) {
+        setPower(true);
+        return;
+    }
     current_screen = static_cast<GuiScreen>((current_screen + 1) % SCREEN_COUNT);
 }
 
@@ -43,7 +50,27 @@ GuiScreen GuiManager::getScreen() const {
     return current_screen;
 }
 
+void GuiManager::setPower(bool on) {
+    if (is_powered == on) return;
+    is_powered = on;
+    BoardHAL::instance().setOledPowered(on);
+    u8g2.setPowerSave(on ? 0 : 1);
+    if (on) {
+        render();
+    }
+}
+
+void GuiManager::togglePower() {
+    setPower(!is_powered);
+}
+
+bool GuiManager::isPowered() const {
+    return is_powered;
+}
+
 void GuiManager::render() {
+    if (!is_powered) return;
+
     const TelemetryData& t = BoardHAL::instance().getTelemetry();
 
     u8g2.clearBuffer();

@@ -7,11 +7,12 @@ BoardHAL& BoardHAL::instance() {
     return hal;
 }
 
-BoardHAL::BoardHAL() : led_state(false), sensor_detected(false), is_bme280(false),
+BoardHAL::BoardHAL() : led_state(false), oled_powered(true), sensor_detected(false), is_bme280(false),
                        temp_offset(-1.0f), vbat_filtered(0.0f), smoothed_pct(-1),
                        last_charging_state(false), vbat_baseline(0.0f), vbat_sample_idx(0),
                        last_button_state(true), last_debounce_time(0) {
     memset(&telemetry, 0, sizeof(telemetry));
+    telemetry.oled_powered = true;
     memset(vbat_samples, 0, sizeof(vbat_samples));
 }
 
@@ -60,6 +61,15 @@ void BoardHAL::toggleLED() {
 
 bool BoardHAL::getLEDState() {
     return led_state;
+}
+
+void BoardHAL::setOledPowered(bool on) {
+    oled_powered = on;
+    telemetry.oled_powered = on;
+}
+
+bool BoardHAL::isOledPowered() const {
+    return oled_powered;
 }
 
 bool BoardHAL::isButtonPressed() {
@@ -317,9 +327,17 @@ void BoardHAL::updateTelemetry() {
         telemetry.time_remaining_hours = (chg_ma > 0.0f) ? (remaining_to_fill_mah / chg_ma) : 0.0f;
     } else {
         // Discharging on battery:
-        // Base: ESP32-S3 240MHz dual core (~48mA) + OLED (~16mA) + BME280 (<0.1mA) + LDO (~4mA) = ~68mA.
-        // Wi-Fi: if active adds ~35mA average = ~103mA total.
-        float dischg_ma = 68.0f;
+        // Base: ESP32-S3 240MHz dual core (~48mA) + BME280 (<0.1mA) + LDO (~4mA) = ~52mA.
+        // Add OLED (~16mA) if powered on:
+        float dischg_ma = 52.0f;
+        if (oled_powered) {
+            dischg_ma += 16.0f;
+        }
+        // Add User LED (~1.4mA) if on:
+        if (led_state) {
+            dischg_ma += 1.4f;
+        }
+        // Add Wi-Fi (~35mA) if active:
         if (WiFi.status() == WL_CONNECTED || WiFi.getMode() != WIFI_OFF) {
             dischg_ma += 35.0f;
         }

@@ -84,6 +84,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div class="card-title">Hardware Controls</div>
       <div class="btn-group">
         <button onclick="sendAction('led_toggle')">Toggle User LED</button>
+        <button id="btn-oled" class="btn-sec" onclick="sendAction('oled_toggle')">Turn Off OLED</button>
         <button class="btn-sec" onclick="sendAction('screen_next')">Next OLED Screen</button>
         <button class="btn-sec" onclick="sendAction('portal')">Setup Hotspot (AP)</button>
         <button class="btn-sec" style="background: #dc2626;" onclick="if(confirm('Reboot device?')) sendAction('reboot')">Reboot</button>
@@ -129,6 +130,16 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('ssid').innerText = data.ssid;
         document.getElementById('clock').innerText = data.time;
         document.getElementById('heap').innerText = Math.round(data.free_heap / 1024);
+        const oledBtn = document.getElementById('btn-oled');
+        if (oledBtn) {
+          if (data.oled_on) {
+            oledBtn.innerText = 'Turn Off OLED';
+            oledBtn.className = 'btn-sec';
+          } else {
+            oledBtn.innerText = 'Turn On OLED';
+            oledBtn.className = '';
+          }
+        }
       } catch (e) {
         console.error(e);
       }
@@ -244,17 +255,18 @@ void WifiService::handleRoot() {
 void WifiService::handleApiTelemetry() {
     const TelemetryData& t = BoardHAL::instance().getTelemetry();
 
-    char json[384];
+    char json[416];
     snprintf(json, sizeof(json),
         "{\"temp_c\":%.2f,\"humidity\":%.2f,\"pressure\":%.2f,\"altitude\":%.1f,"
         "\"battery_v\":%.2f,\"battery_pct\":%d,\"charging\":%s,\"full\":%s,\"usb\":%s,"
-        "\"current_ma\":%.1f,\"power_mw\":%.1f,\"hours_rem\":%.1f,"
+        "\"oled_on\":%s,\"current_ma\":%.1f,\"power_mw\":%.1f,\"hours_rem\":%.1f,"
         "\"free_heap\":%lu,\"ssid\":\"%s\",\"time\":\"%s\"}",
         t.temperature_c, t.humidity_pct, t.pressure_hpa, t.altitude_m,
         t.vbat_volts, t.battery_pct,
         t.is_charging ? "true" : "false",
         t.is_full ? "true" : "false",
         t.is_usb_power ? "true" : "false",
+        GuiManager::instance().isPowered() ? "true" : "false",
         t.current_ma, t.power_mw, t.time_remaining_hours,
         (unsigned long)t.free_heap, WiFi.SSID().c_str(), getTimeString().c_str()
     );
@@ -267,6 +279,12 @@ void WifiService::handleApiAction() {
         String cmd = server.arg("cmd");
         if (cmd == "led_toggle") {
             BoardHAL::instance().toggleLED();
+        } else if (cmd == "oled_toggle") {
+            GuiManager::instance().togglePower();
+        } else if (cmd == "oled_on") {
+            GuiManager::instance().setPower(true);
+        } else if (cmd == "oled_off") {
+            GuiManager::instance().setPower(false);
         } else if (cmd == "screen_next") {
             GuiManager::instance().nextScreen();
         } else if (cmd == "portal") {

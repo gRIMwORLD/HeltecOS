@@ -22,6 +22,9 @@ public:
     void nextScreen();
     void setScreen(GuiScreen screen);
     GuiScreen getScreen() const;
+    void setPower(bool on);
+    void togglePower();
+    bool isPowered() const;
 
 private:
     GuiManager();
@@ -35,5 +38,6 @@ private:
 
     U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2;
     GuiScreen current_screen;
+    bool is_powered;
     uint32_t last_frame_time;
 };

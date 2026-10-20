@@ -135,6 +135,19 @@ void CliShell::executeCommand(const String& cmd_line) {
         } else {
             Serial.printf("Current timezone offset: UTC%+d. Usage: tz <hours> (e.g. tz 0, tz -5, tz +2)\n", WifiService::instance().getTimezoneOffset());
         }
+    } else if (cmd == "oled") {
+        if (arg == "on") {
+            GuiManager::instance().setPower(true);
+            Serial.println("OLED display turned ON.");
+        } else if (arg == "off") {
+            GuiManager::instance().setPower(false);
+            Serial.println("OLED display turned OFF (saving ~16mA).");
+        } else if (arg == "t") {
+            GuiManager::instance().togglePower();
+            Serial.printf("OLED display toggled %s.\n", GuiManager::instance().isPowered() ? "ON" : "OFF");
+        } else {
+            Serial.printf("OLED display is currently %s. Usage: oled on|off|t\n", GuiManager::instance().isPowered() ? "ON" : "OFF");
+        }
     } else if (cmd == "reboot") {
         cmdReboot();
     } else if (cmd == "clear") {
@@ -156,6 +169,7 @@ void CliShell::cmdHelp() {
     Serial.println("  i2c scan        - Scan external I2C bus (SDA: GPIO 4, SCL: GPIO 5)");
     Serial.println("  ps              - List FreeRTOS tasks and system memory status");
     Serial.println("  screen <0..4>   - Switch OLED GUI page (0:Dash 1:Sensor 2:WiFi 3:Tasks 4:About)");
+    Serial.println("  oled <on|off|t> - Turn OLED display on/off (saves ~16mA) or toggle");
     Serial.println("  prg             - Simulate clicking the physical PRG button");
     Serial.println("  led <on|off|t>  - Control onboard user LED (GPIO 35)");
     Serial.println("  wifi            - Show Wi-Fi status, IP, and Web Dashboard URL");

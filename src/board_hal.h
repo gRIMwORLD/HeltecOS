@@ -31,6 +31,7 @@ struct TelemetryData {
     bool is_charging;
     bool is_full;
     bool is_usb_power;
+    bool oled_powered;
     float current_ma;           // Estimated current: (+) charging, (-) discharging
     float power_mw;             // Estimated power consumption / charge rate (mW)
     float time_remaining_hours; // Estimated hours remaining (discharge) or to full (charging)
@@ -69,6 +70,8 @@ public:
     void toggleLED();
     bool getLEDState();
     bool isUsbConnected();
+    void setOledPowered(bool on);
+    bool isOledPowered() const;
 
     // User input
     bool isButtonPressed();
@@ -85,6 +88,7 @@ private:
 
     TelemetryData telemetry;
     bool led_state;
+    bool oled_powered;
     bool sensor_detected;
     bool is_bme280;
     float temp_offset;
