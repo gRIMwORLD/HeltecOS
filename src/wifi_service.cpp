@@ -104,7 +104,8 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('pres').innerText = data.pressure.toFixed(1) + ' hPa';
         document.getElementById('alt').innerText = 'Alt: ' + data.altitude.toFixed(0) + ' m';
         document.getElementById('bat-pct').innerText = data.battery_pct + ' %';
-        document.getElementById('bat-v').innerText = data.battery_v.toFixed(2) + ' V &bull; ' + (data.charging ? 'Charging' : 'Battery');
+        const chgLabel = data.charging ? '<span style="color: #4ade80;">Charging</span>' : 'Discharging';
+        document.getElementById('bat-v').innerHTML = data.battery_v.toFixed(2) + ' V &bull; ' + chgLabel;
         document.getElementById('ssid').innerText = data.ssid;
         document.getElementById('clock').innerText = data.time;
         document.getElementById('heap').innerText = Math.round(data.free_heap / 1024);
