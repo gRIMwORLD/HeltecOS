@@ -24,10 +24,11 @@
 #define PIN_EXT_SCL     5   // Breadboard Row 14
 
 struct TelemetryData {
-    // Battery
+    // Battery & Power
     float vbat_volts;
     int battery_pct;
     bool is_charging;
+    bool is_full;
 
     // Environmental Sensor
     bool sensor_present;
@@ -81,6 +82,11 @@ private:
     bool sensor_detected;
     bool is_bme280;
     float temp_offset;
+
+    // Battery telemetry filter
+    float vbat_baseline;
+    float vbat_samples[8];
+    uint8_t vbat_sample_idx;
 
     TwoWire extWire = TwoWire(1);
     Adafruit_BME280 bme;

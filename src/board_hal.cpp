@@ -6,8 +6,10 @@ BoardHAL& BoardHAL::instance() {
 }
 
 BoardHAL::BoardHAL() : led_state(false), sensor_detected(false), is_bme280(false),
-                       temp_offset(-1.0f), last_button_state(true), last_debounce_time(0) {
+                       temp_offset(-1.0f), vbat_baseline(0.0f), vbat_sample_idx(0),
+                       last_button_state(true), last_debounce_time(0) {
     memset(&telemetry, 0, sizeof(telemetry));
+    memset(vbat_samples, 0, sizeof(vbat_samples));
 }
 
 void BoardHAL::init() {
@@ -172,19 +174,34 @@ TwoWire& BoardHAL::getSensorWire() {
 }
 
 void BoardHAL::updateTelemetry() {
-    // 1. Battery status
+    // 1. Battery status & charging detection
     float v = readBatteryVoltage();
     telemetry.vbat_volts = v;
 
-    // Approximate LiPo percentage
-    if (v >= 4.20f) {
+    vbat_samples[vbat_sample_idx % 8] = v;
+    vbat_sample_idx++;
+
+    if (vbat_baseline == 0.0f) {
+        vbat_baseline = v;
+    }
+
+    // Single-cell LiPo behavior:
+    // Fully charged: >= 4.18V
+    // While connected to USB, the charger raises the terminal voltage.
+    telemetry.is_full = (v >= 4.18f);
+    telemetry.is_charging = (v >= 3.55f && !telemetry.is_full);
+
+    // LiPo capacity percentage mapping (3.25V empty to 4.18V full)
+    if (v >= 4.18f) {
         telemetry.battery_pct = 100;
     } else if (v <= 3.25f) {
         telemetry.battery_pct = 0;
     } else {
-        telemetry.battery_pct = (int)(((v - 3.25f) / (4.20f - 3.25f)) * 100.0f);
+        int pct = (int)(((v - 3.25f) / (4.18f - 3.25f)) * 100.0f);
+        if (pct > 100) pct = 100;
+        if (pct < 0) pct = 0;
+        telemetry.battery_pct = pct;
     }
-    telemetry.is_charging = (v > 4.30f); // USB VBUS boost when plugged in
 
     // 2. Environmental sensor status
     telemetry.sensor_present = sensor_detected;
