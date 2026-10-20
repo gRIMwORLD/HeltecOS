@@ -190,12 +190,18 @@ TwoWire& BoardHAL::getSensorWire() {
 }
 
 int BoardHAL::calculateLipoPct(float volts, bool is_charging) {
-    // When charging, the 500mA charge current through cell internal resistance
-    // and connector (~80mOhm) elevates the measured terminal voltage by ~40mV.
-    // We adjust for this IR drop so charging capacity accurately maps to resting chemistry.
     float v = volts;
-    if (is_charging && v >= 3.60f) {
-        v -= 0.04f;
+    if (is_charging) {
+        // TP4054 500mA charge current + board load switch causes a ~150-170mV total loop IR drop
+        // (cell + PCM + JST connector + wires).
+        // In CC phase (< 4.10V), offset is ~0.15V.
+        // In CV phase (>= 4.10V), charge current tapers down towards 0 at 4.20V.
+        float offset = 0.15f;
+        if (v >= 4.10f) {
+            offset = 0.15f * (4.20f - v) / (4.20f - 4.10f);
+            if (offset < 0.0f) offset = 0.0f;
+        }
+        v -= offset;
     }
 
     // 11-point Piecewise Linear Interpolation for 3.7V JXP 804070 LiPo
@@ -243,15 +249,20 @@ int BoardHAL::calculateLipoPct(float volts, bool is_charging) {
 void BoardHAL::updateTelemetry() {
     // 1. Battery status & charging detection
     float v_raw = readBatteryVoltage();
+    bool usb_pwr = isUsbConnected();
+    bool charging_now = usb_pwr && (v_raw < 4.18f);
 
-    // Exponential Moving Average (EMA) low-pass filter
-    // Tau = ~8-10 seconds to absorb Wi-Fi radio transmission pulses and ADC noise
-    if (vbat_filtered <= 0.1f) {
+    // Instant snap on USB plug/unplug transition so the readout doesn't slowly slide
+    if (smoothed_pct < 0 || last_charging_state != charging_now) {
         vbat_filtered = v_raw;
     } else {
+        // Steady state: EMA low-pass filter (tau ~8-10s) to absorb Wi-Fi radio pulses
         vbat_filtered = (0.12f * v_raw) + (0.88f * vbat_filtered);
     }
     telemetry.vbat_volts = vbat_filtered;
+    telemetry.is_usb_power = usb_pwr;
+    telemetry.is_full = usb_pwr && (vbat_filtered >= 4.18f);
+    telemetry.is_charging = usb_pwr && !telemetry.is_full;
 
     vbat_samples[vbat_sample_idx % 8] = v_raw;
     vbat_sample_idx++;
@@ -260,30 +271,15 @@ void BoardHAL::updateTelemetry() {
         vbat_baseline = vbat_filtered;
     }
 
-    // Single-cell LiPo behavior:
-    // When USB is disconnected, the board runs strictly on battery (discharging).
-    // When USB is connected, TP4054 charges battery until it reaches >= 4.18V.
-    bool usb_pwr = isUsbConnected();
-    telemetry.is_usb_power = usb_pwr;
-
-    if (!usb_pwr) {
-        telemetry.is_charging = false;
-        telemetry.is_full = false;
-    } else {
-        telemetry.is_full = (vbat_filtered >= 4.18f);
-        telemetry.is_charging = !telemetry.is_full;
-    }
-
     // Compute target capacity percentage using the JXP 804070 LiPo curve
     int target_pct = calculateLipoPct(vbat_filtered, telemetry.is_charging);
 
     // Directional Hysteresis / Monotonic clamping:
     // When charging: percentage never dips down from transient load pulses
     // When on battery: percentage never jumps up from transient recovery
-    if (smoothed_pct < 0 || last_charging_state != telemetry.is_charging) {
-        // State transition (plugged in or unplugged) or first boot
+    if (smoothed_pct < 0 || last_charging_state != charging_now) {
         smoothed_pct = target_pct;
-        last_charging_state = telemetry.is_charging;
+        last_charging_state = charging_now;
     } else if (telemetry.is_charging) {
         if (target_pct > smoothed_pct) {
             smoothed_pct = target_pct;
