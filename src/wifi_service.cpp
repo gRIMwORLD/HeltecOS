@@ -104,7 +104,12 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('pres').innerText = data.pressure.toFixed(1) + ' hPa';
         document.getElementById('alt').innerText = 'Alt: ' + data.altitude.toFixed(0) + ' m';
         document.getElementById('bat-pct').innerText = data.battery_pct + ' %';
-        const chgLabel = data.charging ? '<span style="color: #4ade80;">Charging</span>' : 'Discharging';
+        let chgLabel = '<span style="color: #94a3b8;">Discharging</span>';
+        if (data.full) {
+          chgLabel = '<span style="color: #60a5fa;">Fully Charged</span>';
+        } else if (data.charging) {
+          chgLabel = '<span style="color: #4ade80;">Charging</span>';
+        }
         document.getElementById('bat-v').innerHTML = data.battery_v.toFixed(2) + ' V &bull; ' + chgLabel;
         document.getElementById('ssid').innerText = data.ssid;
         document.getElementById('clock').innerText = data.time;
@@ -224,13 +229,16 @@ void WifiService::handleRoot() {
 void WifiService::handleApiTelemetry() {
     const TelemetryData& t = BoardHAL::instance().getTelemetry();
 
-    char json[256];
+    char json[320];
     snprintf(json, sizeof(json),
         "{\"temp_c\":%.2f,\"humidity\":%.2f,\"pressure\":%.2f,\"altitude\":%.1f,"
-        "\"battery_v\":%.2f,\"battery_pct\":%d,\"charging\":%s,"
+        "\"battery_v\":%.2f,\"battery_pct\":%d,\"charging\":%s,\"full\":%s,\"usb\":%s,"
         "\"free_heap\":%lu,\"ssid\":\"%s\",\"time\":\"%s\"}",
         t.temperature_c, t.humidity_pct, t.pressure_hpa, t.altitude_m,
-        t.vbat_volts, t.battery_pct, t.is_charging ? "true" : "false",
+        t.vbat_volts, t.battery_pct,
+        t.is_charging ? "true" : "false",
+        t.is_full ? "true" : "false",
+        t.is_usb_power ? "true" : "false",
         (unsigned long)t.free_heap, WiFi.SSID().c_str(), getTimeString().c_str()
     );
 

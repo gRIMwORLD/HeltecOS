@@ -94,7 +94,9 @@ void GuiManager::drawStatusBar(const TelemetryData& t) {
 
     // Battery percentage on right
     char bat_str[16];
-    if (t.is_charging) {
+    if (t.is_full) {
+        snprintf(bat_str, sizeof(bat_str), "FULL");
+    } else if (t.is_charging) {
         snprintf(bat_str, sizeof(bat_str), "CHG %d%%", t.battery_pct);
     } else {
         snprintf(bat_str, sizeof(bat_str), "%d%%", t.battery_pct);

@@ -1,4 +1,5 @@
 #include "board_hal.h"
+#include "driver/gpio.h"
 
 BoardHAL& BoardHAL::instance() {
     static BoardHAL hal;
@@ -86,6 +87,20 @@ void BoardHAL::initBattery() {
     digitalWrite(PIN_ADC_CTRL, HIGH); // Default OFF to save power
     analogReadResolution(12);
     analogSetAttenuation(ADC_11db);
+
+    // Enable weak pull-down on RXD (GPIO 44) to sense CP2102 power state
+    gpio_set_pull_mode((gpio_num_t)PIN_USB_SENSE, GPIO_PULLDOWN_ONLY);
+}
+
+bool BoardHAL::isUsbConnected() {
+    // When USB is powered, CP2102 actively drives UART0 RXD (GPIO 44) HIGH.
+    // When USB is disconnected, CP2102 is unpowered and the weak pulldown pulls it LOW.
+    // Check twice with 120us delay to avoid mistaking a serial start bit for disconnection.
+    if (gpio_get_level((gpio_num_t)PIN_USB_SENSE) == 1) {
+        return true;
+    }
+    delayMicroseconds(120);
+    return (gpio_get_level((gpio_num_t)PIN_USB_SENSE) == 1);
 }
 
 float BoardHAL::readBatteryVoltage() {
@@ -186,10 +201,18 @@ void BoardHAL::updateTelemetry() {
     }
 
     // Single-cell LiPo behavior:
-    // Fully charged: >= 4.18V
-    // While connected to USB, the charger raises the terminal voltage.
-    telemetry.is_full = (v >= 4.18f);
-    telemetry.is_charging = (v >= 3.55f && !telemetry.is_full);
+    // When USB is disconnected, the board runs strictly on battery (discharging).
+    // When USB is connected, TP4054 charges battery until it reaches >= 4.18V.
+    bool usb_pwr = isUsbConnected();
+    telemetry.is_usb_power = usb_pwr;
+
+    if (!usb_pwr) {
+        telemetry.is_charging = false;
+        telemetry.is_full = false;
+    } else {
+        telemetry.is_full = (v >= 4.18f);
+        telemetry.is_charging = !telemetry.is_full;
+    }
 
     // LiPo capacity percentage mapping (3.25V empty to 4.18V full)
     if (v >= 4.18f) {

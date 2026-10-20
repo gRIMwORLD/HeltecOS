@@ -18,6 +18,7 @@
 // Battery ADC pins
 #define PIN_VBAT_ADC    1
 #define PIN_ADC_CTRL    37
+#define PIN_USB_SENSE   44  // CP2102 UART0 RXD sense pin
 
 // External Sensor I2C (BME280 / BMP280) on Left Header
 #define PIN_EXT_SDA     4   // Breadboard Row 15
@@ -29,6 +30,7 @@ struct TelemetryData {
     int battery_pct;
     bool is_charging;
     bool is_full;
+    bool is_usb_power;
 
     // Environmental Sensor
     bool sensor_present;
@@ -63,6 +65,7 @@ public:
     void setLED(bool on);
     void toggleLED();
     bool getLEDState();
+    bool isUsbConnected();
 
     // User input
     bool isButtonPressed();

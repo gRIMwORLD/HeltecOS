@@ -232,6 +232,7 @@ void CliShell::cmdBattery() {
     Serial.println("\033[1;36m=== POWER & BATTERY TELEMETRY ===\033[0m");
     Serial.printf("Voltage:      %.3f V\n", t.vbat_volts);
     Serial.printf("Est Charge:   %d %%\n", t.battery_pct);
+    Serial.printf("Power Source: %s\n", t.is_usb_power ? "USB Port (5V)" : "LiPo Battery (JST)");
     const char* state_str = "Discharging / Battery";
     if (t.is_full) {
         state_str = "Fully Charged (100%)";
