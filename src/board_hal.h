@@ -86,7 +86,11 @@ private:
     bool is_bme280;
     float temp_offset;
 
-    // Battery telemetry filter
+    // Battery telemetry filter & JXP 804070 LiPo fuel gauge
+    float vbat_filtered;
+    int smoothed_pct;
+    bool last_charging_state;
+    static int calculateLipoPct(float volts, bool is_charging);
     float vbat_baseline;
     float vbat_samples[8];
     uint8_t vbat_sample_idx;

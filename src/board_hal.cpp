@@ -7,7 +7,8 @@ BoardHAL& BoardHAL::instance() {
 }
 
 BoardHAL::BoardHAL() : led_state(false), sensor_detected(false), is_bme280(false),
-                       temp_offset(-1.0f), vbat_baseline(0.0f), vbat_sample_idx(0),
+                       temp_offset(-1.0f), vbat_filtered(0.0f), smoothed_pct(-1),
+                       last_charging_state(false), vbat_baseline(0.0f), vbat_sample_idx(0),
                        last_button_state(true), last_debounce_time(0) {
     memset(&telemetry, 0, sizeof(telemetry));
     memset(vbat_samples, 0, sizeof(vbat_samples));
@@ -188,16 +189,75 @@ TwoWire& BoardHAL::getSensorWire() {
     return extWire;
 }
 
+int BoardHAL::calculateLipoPct(float volts, bool is_charging) {
+    // When charging, the 500mA charge current through cell internal resistance
+    // and connector (~80mOhm) elevates the measured terminal voltage by ~40mV.
+    // We adjust for this IR drop so charging capacity accurately maps to resting chemistry.
+    float v = volts;
+    if (is_charging && v >= 3.60f) {
+        v -= 0.04f;
+    }
+
+    // 11-point Piecewise Linear Interpolation for 3.7V JXP 804070 LiPo
+    struct LipoPoint {
+        float volts;
+        int pct;
+    };
+
+    static const LipoPoint curve[] = {
+        { 4.18f, 100 },
+        { 4.10f,  92 },
+        { 4.00f,  83 },
+        { 3.90f,  72 },
+        { 3.83f,  60 },
+        { 3.78f,  50 },
+        { 3.74f,  40 },
+        { 3.70f,  28 },
+        { 3.65f,  18 },
+        { 3.58f,   9 },
+        { 3.45f,   3 },
+        { 3.30f,   0 }
+    };
+    const int N = sizeof(curve) / sizeof(curve[0]);
+
+    if (v >= curve[0].volts) return 100;
+    if (v <= curve[N - 1].volts) return 0;
+
+    for (int i = 0; i < N - 1; i++) {
+        if (v >= curve[i + 1].volts) {
+            float v_high = curve[i].volts;
+            float v_low  = curve[i + 1].volts;
+            int   p_high = curve[i].pct;
+            int   p_low  = curve[i + 1].pct;
+
+            float ratio = (v - v_low) / (v_high - v_low);
+            int pct = (int)(p_low + ratio * (p_high - p_low) + 0.5f);
+            if (pct > 100) pct = 100;
+            if (pct < 0) pct = 0;
+            return pct;
+        }
+    }
+    return 0;
+}
+
 void BoardHAL::updateTelemetry() {
     // 1. Battery status & charging detection
-    float v = readBatteryVoltage();
-    telemetry.vbat_volts = v;
+    float v_raw = readBatteryVoltage();
 
-    vbat_samples[vbat_sample_idx % 8] = v;
+    // Exponential Moving Average (EMA) low-pass filter
+    // Tau = ~8-10 seconds to absorb Wi-Fi radio transmission pulses and ADC noise
+    if (vbat_filtered <= 0.1f) {
+        vbat_filtered = v_raw;
+    } else {
+        vbat_filtered = (0.12f * v_raw) + (0.88f * vbat_filtered);
+    }
+    telemetry.vbat_volts = vbat_filtered;
+
+    vbat_samples[vbat_sample_idx % 8] = v_raw;
     vbat_sample_idx++;
 
     if (vbat_baseline == 0.0f) {
-        vbat_baseline = v;
+        vbat_baseline = vbat_filtered;
     }
 
     // Single-cell LiPo behavior:
@@ -210,21 +270,35 @@ void BoardHAL::updateTelemetry() {
         telemetry.is_charging = false;
         telemetry.is_full = false;
     } else {
-        telemetry.is_full = (v >= 4.18f);
+        telemetry.is_full = (vbat_filtered >= 4.18f);
         telemetry.is_charging = !telemetry.is_full;
     }
 
-    // LiPo capacity percentage mapping (3.25V empty to 4.18V full)
-    if (v >= 4.18f) {
-        telemetry.battery_pct = 100;
-    } else if (v <= 3.25f) {
-        telemetry.battery_pct = 0;
+    // Compute target capacity percentage using the JXP 804070 LiPo curve
+    int target_pct = calculateLipoPct(vbat_filtered, telemetry.is_charging);
+
+    // Directional Hysteresis / Monotonic clamping:
+    // When charging: percentage never dips down from transient load pulses
+    // When on battery: percentage never jumps up from transient recovery
+    if (smoothed_pct < 0 || last_charging_state != telemetry.is_charging) {
+        // State transition (plugged in or unplugged) or first boot
+        smoothed_pct = target_pct;
+        last_charging_state = telemetry.is_charging;
+    } else if (telemetry.is_charging) {
+        if (target_pct > smoothed_pct) {
+            smoothed_pct = target_pct;
+        }
     } else {
-        int pct = (int)(((v - 3.25f) / (4.18f - 3.25f)) * 100.0f);
-        if (pct > 100) pct = 100;
-        if (pct < 0) pct = 0;
-        telemetry.battery_pct = pct;
+        if (target_pct < smoothed_pct) {
+            smoothed_pct = target_pct;
+        }
     }
+
+    if (telemetry.is_full) {
+        smoothed_pct = 100;
+    }
+
+    telemetry.battery_pct = smoothed_pct;
 
     // 2. Environmental sensor status
     telemetry.sensor_present = sensor_detected;
