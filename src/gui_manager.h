@@ -38,6 +38,7 @@ private:
 
     U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2;
     GuiScreen current_screen;
-    bool is_powered;
+    volatile bool is_powered;
+    volatile bool power_requested;
     uint32_t last_frame_time;
 };

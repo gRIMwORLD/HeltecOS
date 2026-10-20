@@ -11,6 +11,7 @@ GuiManager::GuiManager()
     : u8g2(U8G2_R0, PIN_OLED_SCL, PIN_OLED_SDA, PIN_OLED_RST),
       current_screen(SCREEN_DASHBOARD),
       is_powered(true),
+      power_requested(true),
       last_frame_time(0) {}
 
 void GuiManager::init() {
@@ -18,6 +19,7 @@ void GuiManager::init() {
     u8g2.begin();
     u8g2.enableUTF8Print();
     is_powered = true;
+    power_requested = true;
     BoardHAL::instance().setOledPowered(true);
 
     Serial.println("[GUI] Drawing splash screen...");
@@ -33,7 +35,7 @@ void GuiManager::init() {
 }
 
 void GuiManager::nextScreen() {
-    if (!is_powered) {
+    if (!power_requested) {
         setPower(true);
         return;
     }
@@ -51,24 +53,32 @@ GuiScreen GuiManager::getScreen() const {
 }
 
 void GuiManager::setPower(bool on) {
-    if (is_powered == on) return;
-    is_powered = on;
+    power_requested = on;
     BoardHAL::instance().setOledPowered(on);
-    u8g2.setPowerSave(on ? 0 : 1);
-    if (on) {
-        render();
-    }
 }
 
 void GuiManager::togglePower() {
-    setPower(!is_powered);
+    setPower(!power_requested);
 }
 
 bool GuiManager::isPowered() const {
-    return is_powered;
+    return power_requested;
 }
 
 void GuiManager::render() {
+    // Process power state transitions safely inside taskGUI to avoid I2C bus collision
+    if (power_requested != is_powered) {
+        is_powered = power_requested;
+        if (is_powered) {
+            u8g2.setPowerSave(0);
+        } else {
+            u8g2.clearBuffer();
+            u8g2.sendBuffer();
+            u8g2.setPowerSave(1);
+            return;
+        }
+    }
+
     if (!is_powered) return;
 
     const TelemetryData& t = BoardHAL::instance().getTelemetry();

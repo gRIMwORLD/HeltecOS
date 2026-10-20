@@ -249,6 +249,7 @@ void WifiService::setupWebServer() {
 }
 
 void WifiService::handleRoot() {
+    server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     server.send(200, "text/html", INDEX_HTML);
 }
 
@@ -277,6 +278,7 @@ void WifiService::handleApiTelemetry() {
 void WifiService::handleApiAction() {
     if (server.hasArg("cmd")) {
         String cmd = server.arg("cmd");
+        Serial.printf("[WEB] Action received: %s\n", cmd.c_str());
         if (cmd == "led_toggle") {
             BoardHAL::instance().toggleLED();
         } else if (cmd == "oled_toggle") {
