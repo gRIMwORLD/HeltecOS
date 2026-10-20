@@ -2,6 +2,7 @@
 #include "board_hal.h"
 #include "gui_manager.h"
 #include "cli_shell.h"
+#include "wifi_service.h"
 
 // FreeRTOS Task Handles
 TaskHandle_t guiTaskHandle = NULL;
@@ -47,7 +48,11 @@ void setup() {
     GuiManager::instance().init();
     Serial.println("[BOOT] OLED Display initialized.");
 
-    // 4. Create FreeRTOS Tasks
+    // 4. Initialize WiFi Service & Captive Portal
+    Serial.println("[BOOT] Initializing WiFi Service...");
+    WifiService::instance().init();
+
+    // 5. Create FreeRTOS Tasks
     Serial.println("[BOOT] Spawning FreeRTOS tasks...");
     xTaskCreatePinnedToCore(
         taskGUI,
@@ -73,6 +78,9 @@ void setup() {
 }
 
 void loop() {
+    // Process WiFiManager & Web Server
+    WifiService::instance().process();
+
     // Core 0 loop processes CLI commands non-blocking
     CliShell::instance().process();
     vTaskDelay(pdMS_TO_TICKS(5));

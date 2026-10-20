@@ -1,6 +1,7 @@
 #include "cli_shell.h"
 #include "board_hal.h"
 #include "gui_manager.h"
+#include "wifi_service.h"
 #include <WiFi.h>
 #include <esp_system.h>
 #include <esp_chip_info.h>
@@ -99,8 +100,41 @@ void CliShell::executeCommand(const String& cmd_line) {
         cmdScreen(arg);
     } else if (cmd == "led") {
         cmdLed(arg);
-    } else if (cmd == "wifi" && arg == "scan") {
-        cmdWifiScan();
+    } else if (cmd == "wifi") {
+        if (arg == "scan") {
+            cmdWifiScan();
+        } else if (arg == "portal" || arg == "setup") {
+            WifiService::instance().startPortal();
+            GuiManager::instance().setScreen(SCREEN_WIFI);
+            Serial.println("Captive Portal Hotspot 'HeltecOS-Setup' is now active at 192.168.4.1!");
+            Serial.println("Connect using your phone or laptop to select your home Wi-Fi.");
+        } else if (arg == "reset" || arg == "clear") {
+            Serial.println("Clearing saved Wi-Fi credentials and restarting...");
+            WifiService::instance().resetSettings();
+        } else {
+            // wifi status
+            const WifiService& ws = WifiService::instance();
+            Serial.println("\033[1;36m=== WI-FI & WEB DASHBOARD STATUS ===\033[0m");
+            Serial.printf("State:       %s\n", ws.isConnected() ? "Connected" : (ws.isPortalActive() ? "Hotspot Active (HeltecOS-Setup)" : "Disconnected"));
+            if (ws.isConnected()) {
+                Serial.printf("SSID:        %s\n", ws.getSSID().c_str());
+                Serial.printf("IP Address:  %s\n", ws.getIP().c_str());
+                Serial.printf("Web URL:     http://%s or http://heltecos.local\n", ws.getIP().c_str());
+                Serial.printf("Signal RSSI: %d dBm\n", ws.getRSSI());
+                Serial.printf("Time (NTP):  %s (%s, UTC%+d)\n", ws.getTimeString().c_str(), ws.getDateString().c_str(), ws.getTimezoneOffset());
+            } else if (ws.isPortalActive()) {
+                Serial.println("Hotspot:     HeltecOS-Setup (No password)");
+                Serial.println("Portal IP:   http://192.168.4.1");
+            }
+        }
+    } else if (cmd == "tz") {
+        if (arg.length() > 0) {
+            int tz = arg.toInt();
+            WifiService::instance().setTimezoneOffset(tz);
+            Serial.printf("Timezone offset set to UTC%+d\n", tz);
+        } else {
+            Serial.printf("Current timezone offset: UTC%+d. Usage: tz <hours> (e.g. tz 0, tz -5, tz +2)\n", WifiService::instance().getTimezoneOffset());
+        }
     } else if (cmd == "reboot") {
         cmdReboot();
     } else if (cmd == "clear") {
@@ -124,7 +158,11 @@ void CliShell::cmdHelp() {
     Serial.println("  screen <0..4>   - Switch OLED GUI page (0:Dash 1:Sensor 2:WiFi 3:Tasks 4:About)");
     Serial.println("  prg             - Simulate clicking the physical PRG button");
     Serial.println("  led <on|off|t>  - Control onboard user LED (GPIO 35)");
+    Serial.println("  wifi            - Show Wi-Fi status, IP, and Web Dashboard URL");
     Serial.println("  wifi scan       - Scan nearby 2.4GHz WiFi networks");
+    Serial.println("  wifi portal     - Launch 'HeltecOS-Setup' Captive Portal hotspot");
+    Serial.println("  wifi reset      - Clear saved Wi-Fi credentials from Flash");
+    Serial.println("  tz <hours>      - Set NTP timezone offset (e.g. tz -5 or tz +2)");
     Serial.println("  clear           - Clear terminal screen");
     Serial.println("  reboot          - Restart the ESP32-S3");
 }

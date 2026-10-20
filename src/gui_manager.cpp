@@ -1,4 +1,5 @@
 #include "gui_manager.h"
+#include "wifi_service.h"
 #include <WiFi.h>
 
 GuiManager& GuiManager::instance() {
@@ -80,11 +81,15 @@ void GuiManager::drawStatusBar(const TelemetryData& t) {
     snprintf(page_str, sizeof(page_str), "PAGE %d/%d", current_screen + 1, SCREEN_COUNT);
     u8g2.drawStr(0, 7, page_str);
 
-    // WiFi status in middle
-    if (WiFi.status() == WL_CONNECTED) {
-        u8g2.drawStr(54, 7, "WiFi:ON");
+    // WiFi status or Clock in middle
+    const WifiService& ws = WifiService::instance();
+    if (ws.isConnected()) {
+        String clock_str = ws.getTimeString();
+        u8g2.drawStr(50, 7, clock_str.c_str());
+    } else if (ws.isPortalActive()) {
+        u8g2.drawStr(48, 7, "SETUP-AP");
     } else {
-        u8g2.drawStr(54, 7, "WiFi:--");
+        u8g2.drawStr(52, 7, "WiFi:--");
     }
 
     // Battery percentage on right
@@ -174,26 +179,42 @@ void GuiManager::drawEnvSensor(const TelemetryData& t) {
 }
 
 void GuiManager::drawWiFiScreen(const TelemetryData& t) {
-    u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.drawStr(0, 22, "WiFi Networking");
+    const WifiService& ws = WifiService::instance();
 
-    u8g2.setFont(u8g2_font_5x7_tf);
-    if (WiFi.status() == WL_CONNECTED) {
+    u8g2.setFont(u8g2_font_6x10_tf);
+
+    if (ws.isConnected()) {
+        u8g2.drawStr(0, 21, "WiFi: Connected");
+
+        u8g2.setFont(u8g2_font_5x7_tf);
         char ssid_str[32];
-        snprintf(ssid_str, sizeof(ssid_str), "SSID: %s", WiFi.SSID().c_str());
-        u8g2.drawStr(0, 34, ssid_str);
+        snprintf(ssid_str, sizeof(ssid_str), "SSID: %s", ws.getSSID().c_str());
+        u8g2.drawStr(0, 32, ssid_str);
 
         char ip_str[32];
-        snprintf(ip_str, sizeof(ip_str), "IP: %s", WiFi.localIP().toString().c_str());
-        u8g2.drawStr(0, 45, ip_str);
+        snprintf(ip_str, sizeof(ip_str), "IP:   %s", ws.getIP().c_str());
+        u8g2.drawStr(0, 42, ip_str);
+
+        u8g2.drawStr(0, 52, "Web:  http://heltecos.local");
 
         char rssi_str[32];
-        snprintf(rssi_str, sizeof(rssi_str), "RSSI: %d dBm", WiFi.RSSI());
-        u8g2.drawStr(0, 56, rssi_str);
+        snprintf(rssi_str, sizeof(rssi_str), "RSSI: %d dBm  Clock: OK", ws.getRSSI());
+        u8g2.drawStr(0, 62, rssi_str);
+    } else if (ws.isPortalActive()) {
+        u8g2.drawStr(0, 21, "SETUP HOTSPOT ACTIVE");
+
+        u8g2.setFont(u8g2_font_5x7_tf);
+        u8g2.drawStr(0, 33, "SSID: HeltecOS-Setup");
+        u8g2.drawStr(0, 43, "IP:   192.168.4.1");
+        u8g2.drawStr(0, 54, "Connect phone/laptop");
+        u8g2.drawStr(0, 63, "to configure Wi-Fi");
     } else {
-        u8g2.drawStr(0, 34, "Status: Disconnected");
-        u8g2.drawStr(0, 46, "Use Serial CLI to scan:");
-        u8g2.drawStr(0, 58, "Type: wifi scan");
+        u8g2.drawStr(0, 21, "WiFi: Disconnected");
+
+        u8g2.setFont(u8g2_font_5x7_tf);
+        u8g2.drawStr(0, 34, "No saved Wi-Fi found");
+        u8g2.drawStr(0, 46, "In CLI, type:");
+        u8g2.drawStr(0, 58, "wifi portal");
     }
 }
 
