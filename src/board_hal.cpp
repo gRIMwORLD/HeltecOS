@@ -9,11 +9,13 @@ BoardHAL& BoardHAL::instance() {
 
 BoardHAL::BoardHAL() : led_state(false), oled_powered(true), sensor_detected(false), is_bme280(false),
                        temp_offset(-1.0f), vbat_filtered(0.0f), smoothed_pct(-1),
-                       last_charging_state(false), vbat_baseline(0.0f), vbat_sample_idx(0),
+                       last_charging_state(false), prev_v_raw(0.0f), usb_power_latched(true),
+                       vbat_hist_count(0), vbat_baseline(0.0f), vbat_sample_idx(0),
                        last_button_state(true), last_debounce_time(0) {
     memset(&telemetry, 0, sizeof(telemetry));
     telemetry.oled_powered = true;
     memset(vbat_samples, 0, sizeof(vbat_samples));
+    memset(vbat_history, 0, sizeof(vbat_history));
 }
 
 void BoardHAL::init() {
@@ -99,20 +101,10 @@ void BoardHAL::initBattery() {
     digitalWrite(PIN_ADC_CTRL, HIGH); // Default OFF to save power
     analogReadResolution(12);
     analogSetAttenuation(ADC_11db);
-
-    // Enable weak pull-down on RXD (GPIO 44) to sense CP2102 power state
-    gpio_set_pull_mode((gpio_num_t)PIN_USB_SENSE, GPIO_PULLDOWN_ONLY);
 }
 
 bool BoardHAL::isUsbConnected() {
-    // When USB is powered, CP2102 actively drives UART0 RXD (GPIO 44) HIGH.
-    // When USB is disconnected, CP2102 is unpowered and the weak pulldown pulls it LOW.
-    // Check twice with 120us delay to avoid mistaking a serial start bit for disconnection.
-    if (gpio_get_level((gpio_num_t)PIN_USB_SENSE) == 1) {
-        return true;
-    }
-    delayMicroseconds(120);
-    return (gpio_get_level((gpio_num_t)PIN_USB_SENSE) == 1);
+    return usb_power_latched;
 }
 
 float BoardHAL::readBatteryVoltage() {
@@ -258,9 +250,68 @@ int BoardHAL::calculateLipoPct(float volts, bool is_charging) {
 }
 
 void BoardHAL::updateTelemetry() {
-    // 1. Battery status & charging detection
+    // 1. Battery status & physical voltage-dynamics detection
     float v_raw = readBatteryVoltage();
-    bool usb_pwr = isUsbConnected();
+
+    if (prev_v_raw > 2.0f) {
+        // Circular buffer for voltage history (last 30 samples, 1 per second)
+        uint16_t cur_idx = vbat_hist_count % 30;
+        vbat_history[cur_idx] = v_raw;
+        vbat_hist_count++;
+
+        // 1-second and 2-second step detection
+        // Current reversal (+460mA <-> -100mA) across loop IR (~0.28 ohm) causes an instant ~100-170mV jump/drop.
+        // A step of >= 50mV in 1-2 seconds cannot occur from normal load or resting.
+        float dv_1s = v_raw - prev_v_raw;
+        float dv_2s = dv_1s;
+        if (vbat_hist_count > 2) {
+            uint16_t prev2_idx = (vbat_hist_count >= 3) ? ((vbat_hist_count - 3) % 30) : 0;
+            dv_2s = v_raw - vbat_history[prev2_idx];
+        }
+
+        if (dv_1s <= -0.050f || dv_2s <= -0.050f) {
+            usb_power_latched = false;
+        } else if (dv_1s >= +0.050f || dv_2s >= +0.050f) {
+            usb_power_latched = true;
+        }
+
+        // Rolling slope detection over 15-30 second window
+        if (vbat_hist_count >= 15) {
+            uint16_t oldest_idx = (vbat_hist_count < 30) ? 0 : (vbat_hist_count % 30);
+            float v_old = vbat_history[oldest_idx];
+            float dv_slope = v_raw - v_old;
+
+            // Discharging battery strictly drops or stays flat. If rising by >= 8mV, it's charging.
+            if (!usb_power_latched && dv_slope >= +0.008f) {
+                usb_power_latched = true;
+            }
+            // Charging battery strictly rises or stays flat. If dropping by >= 8mV, it's discharging.
+            else if (usb_power_latched && dv_slope <= -0.008f && v_raw < 4.15f) {
+                usb_power_latched = false;
+            }
+        }
+    } else {
+        // First boot initialization
+        // A LiPo under 50-100mA load resting voltage never exceeds 4.12V.
+        if (v_raw >= 4.15f) {
+            usb_power_latched = true;
+        } else {
+            // Default based on voltage threshold at boot
+            usb_power_latched = (v_raw > 4.05f);
+        }
+        vbat_history[0] = v_raw;
+        vbat_hist_count = 1;
+    }
+
+    // Absolute physical boundary rule:
+    // A LiPo under 100mA discharge load cannot sustain >= 4.16V.
+    if (v_raw >= 4.16f) {
+        usb_power_latched = true;
+    }
+
+    prev_v_raw = v_raw;
+
+    bool usb_pwr = usb_power_latched;
     bool charging_now = usb_pwr && (v_raw < 4.18f);
 
     // Instant snap on USB plug/unplug transition so the readout doesn't slowly slide

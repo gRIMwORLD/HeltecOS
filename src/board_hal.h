@@ -98,6 +98,10 @@ private:
     int smoothed_pct;
     bool last_charging_state;
     static int calculateLipoPct(float volts, bool is_charging);
+    float prev_v_raw;
+    bool usb_power_latched;
+    float vbat_history[30];
+    uint16_t vbat_hist_count;
     float vbat_baseline;
     float vbat_samples[8];
     uint8_t vbat_sample_idx;

@@ -148,6 +148,20 @@ void CliShell::executeCommand(const String& cmd_line) {
         } else {
             Serial.printf("OLED display is currently %s. Usage: oled on|off|t\n", GuiManager::instance().isPowered() ? "ON" : "OFF");
         }
+    } else if (cmd == "diag") {
+        Serial.println("=== POWER & HARDWARE DIAGNOSTICS ===");
+        const TelemetryData& t = BoardHAL::instance().getTelemetry();
+        Serial.printf("Vbat Voltage:       %.3f V\n", t.vbat_volts);
+        Serial.printf("Battery Capacity:   %d %%\n", t.battery_pct);
+        Serial.printf("USB Power Latched:  %s\n", t.is_usb_power ? "YES (USB connected)" : "NO (On Battery)");
+        Serial.printf("Charge State:       %s\n", t.is_full ? "FULL (100%)" : (t.is_charging ? "CHARGING" : "DISCHARGING"));
+        Serial.printf("Current:            %.1f mA\n", t.current_ma);
+        Serial.printf("Power:              %.1f mW\n", t.power_mw);
+        Serial.printf("Time Remaining:     %.2f hours\n", t.time_remaining_hours);
+        Serial.printf("OLED State:         %s\n", t.oled_powered ? "ON (~16mA)" : "OFF (0mA)");
+        Serial.printf("User LED:           %s\n", BoardHAL::instance().getLEDState() ? "ON (~1.4mA)" : "OFF");
+        Serial.printf("Raw GPIO 44 (RXD):  %d\n", gpio_get_level((gpio_num_t)44));
+        Serial.printf("Raw GPIO 43 (TXD):  %d\n", gpio_get_level((gpio_num_t)43));
     } else if (cmd == "reboot") {
         cmdReboot();
     } else if (cmd == "clear") {
