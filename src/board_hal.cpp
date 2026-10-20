@@ -1,5 +1,6 @@
 #include "board_hal.h"
 #include "driver/gpio.h"
+#include <WiFi.h>
 
 BoardHAL& BoardHAL::instance() {
     static BoardHAL hal;
@@ -296,7 +297,40 @@ void BoardHAL::updateTelemetry() {
 
     telemetry.battery_pct = smoothed_pct;
 
-    // 2. Environmental sensor status
+    // 2. Dynamic Power & Battery Life Estimation (JXP 804070 2500mAh)
+    const float BATTERY_CAPACITY_MAH = 2500.0f;
+
+    if (telemetry.is_charging) {
+        // Charging phase:
+        // In CC phase (< 4.10V), TP4054 supplies ~460mA constant current.
+        // In CV phase (>= 4.10V), current tapers down towards 40mA at 4.20V.
+        float chg_ma = 460.0f;
+        if (vbat_filtered >= 4.10f) {
+            chg_ma = 40.0f + 420.0f * ((4.20f - vbat_filtered) / (4.20f - 4.10f));
+            if (chg_ma < 40.0f) chg_ma = 40.0f;
+            if (chg_ma > 460.0f) chg_ma = 460.0f;
+        }
+        telemetry.current_ma = chg_ma; // Positive = charging
+        telemetry.power_mw = vbat_filtered * chg_ma;
+
+        float remaining_to_fill_mah = BATTERY_CAPACITY_MAH * (1.0f - (smoothed_pct / 100.0f));
+        telemetry.time_remaining_hours = (chg_ma > 0.0f) ? (remaining_to_fill_mah / chg_ma) : 0.0f;
+    } else {
+        // Discharging on battery:
+        // Base: ESP32-S3 240MHz dual core (~48mA) + OLED (~16mA) + BME280 (<0.1mA) + LDO (~4mA) = ~68mA.
+        // Wi-Fi: if active adds ~35mA average = ~103mA total.
+        float dischg_ma = 68.0f;
+        if (WiFi.status() == WL_CONNECTED || WiFi.getMode() != WIFI_OFF) {
+            dischg_ma += 35.0f;
+        }
+        telemetry.current_ma = -dischg_ma; // Negative = discharging
+        telemetry.power_mw = vbat_filtered * dischg_ma;
+
+        float remaining_mah = BATTERY_CAPACITY_MAH * (smoothed_pct / 100.0f);
+        telemetry.time_remaining_hours = (dischg_ma > 0.0f) ? (remaining_mah / dischg_ma) : 0.0f;
+    }
+
+    // 3. Environmental sensor status
     telemetry.sensor_present = sensor_detected;
     telemetry.is_bme = is_bme280;
 

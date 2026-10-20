@@ -75,6 +75,8 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <div class="card-title">Battery Status</div>
         <div class="card-val" id="bat-pct">-- %</div>
         <div class="card-sub" id="bat-v">--.- V &bull; Normal</div>
+        <div class="card-sub" style="margin-top: 4px; font-weight: 500;" id="bat-pwr">Power: -- mW</div>
+        <div class="card-sub" style="color: #38bdf8;" id="bat-rem">Runtime: --</div>
       </div>
     </div>
 
@@ -111,6 +113,19 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           chgLabel = '<span style="color: #4ade80;">Charging</span>';
         }
         document.getElementById('bat-v').innerHTML = data.battery_v.toFixed(2) + ' V &bull; ' + chgLabel;
+        const pwrSign = data.current_ma > 0 ? '+' : '';
+        document.getElementById('bat-pwr').innerText = 'Power: ' + Math.round(data.power_mw) + ' mW (' + pwrSign + Math.round(data.current_ma) + ' mA)';
+        let remText = '';
+        const remH = Math.floor(data.hours_rem);
+        const remM = Math.round((data.hours_rem - remH) * 60);
+        if (data.full) {
+          remText = 'Fully Charged (100%)';
+        } else if (data.charging) {
+          remText = 'Full in ~' + remH + 'h ' + (remM < 10 ? '0' : '') + remM + 'm';
+        } else {
+          remText = 'Runtime: ~' + remH + 'h ' + (remM < 10 ? '0' : '') + remM + 'm left';
+        }
+        document.getElementById('bat-rem').innerText = remText;
         document.getElementById('ssid').innerText = data.ssid;
         document.getElementById('clock').innerText = data.time;
         document.getElementById('heap').innerText = Math.round(data.free_heap / 1024);
@@ -229,16 +244,18 @@ void WifiService::handleRoot() {
 void WifiService::handleApiTelemetry() {
     const TelemetryData& t = BoardHAL::instance().getTelemetry();
 
-    char json[320];
+    char json[384];
     snprintf(json, sizeof(json),
         "{\"temp_c\":%.2f,\"humidity\":%.2f,\"pressure\":%.2f,\"altitude\":%.1f,"
         "\"battery_v\":%.2f,\"battery_pct\":%d,\"charging\":%s,\"full\":%s,\"usb\":%s,"
+        "\"current_ma\":%.1f,\"power_mw\":%.1f,\"hours_rem\":%.1f,"
         "\"free_heap\":%lu,\"ssid\":\"%s\",\"time\":\"%s\"}",
         t.temperature_c, t.humidity_pct, t.pressure_hpa, t.altitude_m,
         t.vbat_volts, t.battery_pct,
         t.is_charging ? "true" : "false",
         t.is_full ? "true" : "false",
         t.is_usb_power ? "true" : "false",
+        t.current_ma, t.power_mw, t.time_remaining_hours,
         (unsigned long)t.free_heap, WiFi.SSID().c_str(), getTimeString().c_str()
     );
 

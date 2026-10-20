@@ -233,6 +233,19 @@ void CliShell::cmdBattery() {
     Serial.printf("Voltage:      %.3f V\n", t.vbat_volts);
     Serial.printf("Est Charge:   %d %%\n", t.battery_pct);
     Serial.printf("Power Source: %s\n", t.is_usb_power ? "USB Port (5V)" : "LiPo Battery (JST)");
+    Serial.printf("Live Current: %+.1f mA\n", t.current_ma);
+    Serial.printf("Power Draw:   %.1f mW (%.2f W)\n", t.power_mw, t.power_mw / 1000.0f);
+
+    int rem_h = (int)t.time_remaining_hours;
+    int rem_m = (int)((t.time_remaining_hours - rem_h) * 60.0f);
+    if (t.is_full) {
+        Serial.println("Time to Full: Battery 100% Charged");
+    } else if (t.is_charging) {
+        Serial.printf("Time to Full: ~%d hrs %02d mins\n", rem_h, rem_m);
+    } else {
+        Serial.printf("Time Left:    ~%d hrs %02d mins remaining\n", rem_h, rem_m);
+    }
+
     const char* state_str = "Discharging / Battery";
     if (t.is_full) {
         state_str = "Fully Charged (100%)";

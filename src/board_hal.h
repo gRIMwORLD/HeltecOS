@@ -31,6 +31,9 @@ struct TelemetryData {
     bool is_charging;
     bool is_full;
     bool is_usb_power;
+    float current_ma;           // Estimated current: (+) charging, (-) discharging
+    float power_mw;             // Estimated power consumption / charge rate (mW)
+    float time_remaining_hours; // Estimated hours remaining (discharge) or to full (charging)
 
     // Environmental Sensor
     bool sensor_present;

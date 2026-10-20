@@ -118,21 +118,40 @@ void GuiManager::drawDashboard(const TelemetryData& t) {
     int sec = s % 60;
     char up_str[32];
     snprintf(up_str, sizeof(up_str), "Up: %02d:%02d:%02d", h, m, sec);
-    u8g2.drawStr(0, 22, up_str);
+    u8g2.drawStr(0, 21, up_str);
 
-    // Battery voltage
+    // Battery voltage & capacity
     char bat_str[32];
     snprintf(bat_str, sizeof(bat_str), "Bat: %.2fV (%d%%)", t.vbat_volts, t.battery_pct);
-    u8g2.drawStr(0, 35, bat_str);
+    u8g2.drawStr(0, 32, bat_str);
 
-    // Free RAM
-    char mem_str[32];
-    snprintf(mem_str, sizeof(mem_str), "RAM: %lu KB Free", (unsigned long)(t.free_heap / 1024));
-    u8g2.drawStr(0, 48, mem_str);
+    // Live power consumption & current
+    char pwr_str[32];
+    if (t.is_charging) {
+        snprintf(pwr_str, sizeof(pwr_str), "Chg: +%.1fW (+%dmA)", t.power_mw / 1000.0f, (int)t.current_ma);
+    } else {
+        snprintf(pwr_str, sizeof(pwr_str), "Pwr: ~%dmW (%dmA)", (int)t.power_mw, (int)t.current_ma);
+    }
+    u8g2.drawStr(0, 43, pwr_str);
 
-    // CPU info
+    // Time remaining / time to full
+    char rem_str[32];
+    int rem_h = (int)t.time_remaining_hours;
+    int rem_m = (int)((t.time_remaining_hours - rem_h) * 60.0f);
+    if (t.is_full) {
+        snprintf(rem_str, sizeof(rem_str), "State: 100%% Charged");
+    } else if (t.is_charging) {
+        snprintf(rem_str, sizeof(rem_str), "Full in: ~%dh %02dm", rem_h, rem_m);
+    } else {
+        snprintf(rem_str, sizeof(rem_str), "Rem: ~%dh %02dm left", rem_h, rem_m);
+    }
+    u8g2.drawStr(0, 54, rem_str);
+
+    // Bottom line (Free RAM & CPU)
     u8g2.setFont(u8g2_font_5x7_tf);
-    u8g2.drawStr(0, 61, "ESP32-S3 @ 240MHz 8MB Flash");
+    char mem_str[32];
+    snprintf(mem_str, sizeof(mem_str), "RAM:%luKB  ESP32-S3", (unsigned long)(t.free_heap / 1024));
+    u8g2.drawStr(0, 63, mem_str);
 }
 
 void GuiManager::drawEnvSensor(const TelemetryData& t) {
