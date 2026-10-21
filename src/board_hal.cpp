@@ -114,10 +114,10 @@ float BoardHAL::readBatteryVoltage() {
 
     // Read average of multiple samples
     uint32_t raw_mv = 0;
-    const int SAMPLES = 8;
+    const int SAMPLES = 16;
     for (int i = 0; i < SAMPLES; i++) {
         raw_mv += analogReadMilliVolts(PIN_VBAT_ADC);
-        delayMicroseconds(100);
+        delayMicroseconds(50);
     }
     raw_mv /= SAMPLES;
 
@@ -254,41 +254,25 @@ void BoardHAL::updateTelemetry() {
     float v_raw = readBatteryVoltage();
 
     if (prev_v_raw > 2.0f) {
-        // Circular buffer for voltage history (last 30 samples, 1 per second)
-        uint16_t cur_idx = vbat_hist_count % 30;
-        vbat_history[cur_idx] = v_raw;
+        // Track recent samples in circular buffer (last 10 samples)
+        vbat_history[vbat_hist_count % 10] = v_raw;
         vbat_hist_count++;
 
-        // 1-second and 2-second step detection
-        // Current reversal (+460mA <-> -100mA) across loop IR (~0.28 ohm) causes an instant ~100-170mV jump/drop.
-        // A step of >= 50mV in 1-2 seconds cannot occur from normal load or resting.
+        // 1-second and 2-second step detection:
+        // Physical current reversal (+460mA <-> -100mA) across ~0.25 ohm loop IR
+        // creates an instantaneous step of ~100mV - 170mV.
+        // A step of >= 45mV in 1-2 seconds cannot occur under steady load or rest.
         float dv_1s = v_raw - prev_v_raw;
         float dv_2s = dv_1s;
-        if (vbat_hist_count > 2) {
-            uint16_t prev2_idx = (vbat_hist_count >= 3) ? ((vbat_hist_count - 3) % 30) : 0;
+        if (vbat_hist_count >= 3) {
+            uint16_t prev2_idx = (vbat_hist_count - 3) % 10;
             dv_2s = v_raw - vbat_history[prev2_idx];
         }
 
-        if (dv_1s <= -0.050f || dv_2s <= -0.050f) {
+        if (dv_1s <= -0.045f || dv_2s <= -0.045f) {
             usb_power_latched = false;
-        } else if (dv_1s >= +0.050f || dv_2s >= +0.050f) {
+        } else if (dv_1s >= +0.045f || dv_2s >= +0.045f) {
             usb_power_latched = true;
-        }
-
-        // Rolling slope detection over 15-30 second window
-        if (vbat_hist_count >= 15) {
-            uint16_t oldest_idx = (vbat_hist_count < 30) ? 0 : (vbat_hist_count % 30);
-            float v_old = vbat_history[oldest_idx];
-            float dv_slope = v_raw - v_old;
-
-            // Discharging battery strictly drops or stays flat. If rising by >= 8mV, it's charging.
-            if (!usb_power_latched && dv_slope >= +0.008f) {
-                usb_power_latched = true;
-            }
-            // Charging battery strictly rises or stays flat. If dropping by >= 8mV, it's discharging.
-            else if (usb_power_latched && dv_slope <= -0.008f && v_raw < 4.15f) {
-                usb_power_latched = false;
-            }
         }
     } else {
         // First boot initialization
@@ -296,16 +280,15 @@ void BoardHAL::updateTelemetry() {
         if (v_raw >= 4.15f) {
             usb_power_latched = true;
         } else {
-            // Default based on voltage threshold at boot
-            usb_power_latched = (v_raw > 4.05f);
+            usb_power_latched = true; // Default to true on boot when connected
         }
         vbat_history[0] = v_raw;
         vbat_hist_count = 1;
     }
 
     // Absolute physical boundary rule:
-    // A LiPo under 100mA discharge load cannot sustain >= 4.16V.
-    if (v_raw >= 4.16f) {
+    // A LiPo under 100mA discharge load cannot sustain >= 4.17V.
+    if (v_raw >= 4.17f) {
         usb_power_latched = true;
     }
 
