@@ -41,10 +41,16 @@ void BluetoothManager::init() {
     // Start service
     pService->start();
 
-    // 6. Set up Advertising
+    // 6. Set up Advertising with standard connectable flags
     pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(HELTECOS_SERVICE_UUID);
     pAdvertising->setScanResponse(true);
+
+    BLEAdvertisementData advData;
+    advData.setName("HeltecOS");
+    advData.setFlags(0x06); // General Discoverable + BR/EDR Not Supported (BLE Only)
+    advData.setCompleteServices(BLEUUID(HELTECOS_SERVICE_UUID));
+    pAdvertising->setAdvertisementData(advData);
 
     BLEDevice::startAdvertising();
     Serial.println("[BLE] Bluetooth Low Energy service advertising as 'HeltecOS'");
@@ -133,23 +139,6 @@ void BluetoothManager::updateTelemetry(const TelemetryData& t) {
         if (connected_count > 0) {
             pTelemetryChar->notify();
         }
-    }
-
-    // 2. Broadcast in Advertising Manufacturer Data (Broadcasting to infinite PCs simultaneously)
-    // Manufacturer ID: 0xFFFF (Test / Custom) followed by our telemetry payload
-    if (pAdvertising != nullptr) {
-        String mfgData;
-        mfgData.concat((char)0xFF);
-        mfgData.concat((char)0xFF);
-        const char* pBytes = (const char*)&payload;
-        for (size_t i = 0; i < sizeof(payload); i++) {
-            mfgData.concat(pBytes[i]);
-        }
-
-        BLEAdvertisementData advData;
-        advData.setName("HeltecOS");
-        advData.setManufacturerData(mfgData);
-        pAdvertising->setAdvertisementData(advData);
     }
 }
 
