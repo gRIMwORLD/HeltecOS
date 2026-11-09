@@ -363,7 +363,7 @@
             try {
                 log("Scanning for 'HeltecOS' BLE device...");
                 bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'HeltecOS' }],
+                    filters: [{ services: [HELTECOS_SERVICE_UUID] }],
                     optionalServices: [HELTECOS_SERVICE_UUID]
                 });
 
