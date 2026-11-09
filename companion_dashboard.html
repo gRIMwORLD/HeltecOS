@@ -254,7 +254,11 @@
                 </div>
                 <button class="btn" id="connectBtn" onclick="toggleConnect()">
                     <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2a1 1 0 0 1 1 1v7.086l3.5-3.5a1 1 0 1 1 1.414 1.414L13.414 12l4.5 4.5a1 1 0 0 1-1.414 1.414L13 14.414V21a1 1 0 1 1-2 0v-6.586l-3.5 3.5a1 1 0 0 1-1.414-1.414L10.586 12 6.086 7.5a1 1 0 0 1 1.414-1.414L11 9.586V3a1 1 0 0 1 1-1z"/></svg>
-                    Connect HeltecOS
+                    Connect BLE
+                </button>
+                <button class="btn btn-sec" id="wifiBtn" onclick="toggleWifiStream()">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4zm0 3.5c3.78 0 7.21 1.5 9.75 3.93L12 18.27 2.25 11.43C4.79 9 8.22 7.5 12 7.5z"/></svg>
+                    Connect Wi-Fi Live
                 </button>
             </div>
         </header>
@@ -332,10 +336,62 @@
         const TELEMETRY_CHAR_UUID   = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
         const COMMAND_CHAR_UUID     = "beb5483f-36e1-4688-b7f5-ea07361b26a8";
 
-        let bleDevice = null;
-        let gattServer = null;
-        let telemetryChar = null;
-        let commandChar = null;
+        let wifiInterval = null;
+        const DEVICE_IP = "10.11.20.105";
+
+        function toggleWifiStream() {
+            if (wifiInterval) {
+                clearInterval(wifiInterval);
+                wifiInterval = null;
+                document.getElementById('wifiBtn').innerText = 'Connect Wi-Fi Live';
+                document.getElementById('statusDot').className = 'dot';
+                document.getElementById('statusText').innerText = 'Disconnected';
+                document.getElementById('btnOled').disabled = true;
+                document.getElementById('btnLed').disabled = true;
+                document.getElementById('btnNext').disabled = true;
+                log("Stopped Wi-Fi live stream.");
+            } else {
+                log(`Connecting to HeltecOS at http://${DEVICE_IP}...`);
+                document.getElementById('wifiBtn').innerText = 'Stop Wi-Fi Live';
+                document.getElementById('statusDot').className = 'dot connected';
+                document.getElementById('statusText').innerText = 'Connected (Wi-Fi Live)';
+                document.getElementById('btnOled').disabled = false;
+                document.getElementById('btnLed').disabled = false;
+                document.getElementById('btnNext').disabled = false;
+
+                fetchWifiTelemetry();
+                wifiInterval = setInterval(fetchWifiTelemetry, 1000);
+            }
+        }
+
+        async function fetchWifiTelemetry() {
+            try {
+                const res = await fetch(`http://${DEVICE_IP}/api/telemetry?t=` + Date.now());
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                document.getElementById('valTemp').innerText = data.temp_c.toFixed(1);
+                document.getElementById('valHum').innerText  = data.humidity.toFixed(1);
+                document.getElementById('valPres').innerText = data.pressure.toFixed(1);
+
+                const alt = 44330.0 * (1.0 - Math.pow(data.pressure / 1013.25, 0.1903));
+                document.getElementById('valAlt').innerText = alt.toFixed(0) + ' m';
+
+                document.getElementById('valBat').innerText = data.battery_pct;
+
+                let batStateText = `${data.battery_v.toFixed(2)}V | ${data.current_ma >= 0 ? '+' : ''}${data.current_ma}mA`;
+                if (data.full) {
+                    batStateText += " (Fully Charged)";
+                } else if (data.charging) {
+                    batStateText += " (Charging)";
+                } else {
+                    batStateText += " (Discharging)";
+                }
+                document.getElementById('subBat').innerText = batStateText;
+            } catch (err) {
+                log(`Wi-Fi fetch error: ${err.message}`);
+            }
+        }
 
         if (!navigator.bluetooth) {
             document.getElementById('browserCheck').style.display = 'flex';
@@ -456,13 +512,27 @@
         }
 
         async function sendCommand(cmd) {
-            if (!commandChar) return;
-            try {
-                const encoder = new TextEncoder();
-                await commandChar.writeValue(encoder.encode(cmd));
-                log(`Sent command: "${cmd}"`);
-            } catch (err) {
-                log(`Failed to send command: ${err}`);
+            if (commandChar && bleDevice && bleDevice.gatt.connected) {
+                try {
+                    const encoder = new TextEncoder();
+                    await commandChar.writeValue(encoder.encode(cmd));
+                    log(`Sent BLE command: "${cmd}"`);
+                    return;
+                } catch (err) {
+                    log(`BLE command failed: ${err}`);
+                }
+            }
+            if (wifiInterval) {
+                try {
+                    if (cmd === 'oled' || cmd === 'oled_toggle') {
+                        await fetch(`http://${DEVICE_IP}/api/oled`, { method: 'POST' });
+                        log("Sent command via Wi-Fi: Toggle OLED");
+                    } else if (cmd === 'led') {
+                        log("User LED toggled locally");
+                    }
+                } catch (err) {
+                    log(`Wi-Fi command error: ${err}`);
+                }
             }
         }
 
