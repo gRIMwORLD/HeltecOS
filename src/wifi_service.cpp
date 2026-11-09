@@ -272,6 +272,9 @@ void WifiService::handleApiTelemetry() {
         (unsigned long)t.free_heap, WiFi.SSID().c_str(), getTimeString().c_str()
     );
 
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    server.sendHeader("Access-Control-Allow-Headers", "*");
     server.send(200, "application/json", json);
 }
 
