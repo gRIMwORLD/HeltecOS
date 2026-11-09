@@ -15,6 +15,11 @@ void BluetoothManager::init() {
     // 1. Initialize BLE Device with custom name
     BLEDevice::init("HeltecOS");
 
+    // Maximize Bluetooth RF Transmission Power to +9dBm (ESP_PWR_LVL_P9)
+    BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
+    BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_ADV);
+    BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_CONN_HDL0);
+
     // 2. Create the BLE Server
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(this);
