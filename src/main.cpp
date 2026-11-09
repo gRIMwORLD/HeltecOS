@@ -3,6 +3,7 @@
 #include "gui_manager.h"
 #include "cli_shell.h"
 #include "wifi_service.h"
+#include "ble_service.h"
 
 // FreeRTOS Task Handles
 TaskHandle_t guiTaskHandle = NULL;
@@ -30,6 +31,7 @@ void taskGUI(void* parameter) {
 void taskSensor(void* parameter) {
     for (;;) {
         BoardHAL::instance().updateTelemetry();
+        BluetoothManager::instance().updateTelemetry(BoardHAL::instance().getTelemetry());
         vTaskDelay(pdMS_TO_TICKS(1000)); // Sample every 1s
     }
 }
@@ -52,7 +54,11 @@ void setup() {
     Serial.println("[BOOT] Initializing WiFi Service...");
     WifiService::instance().init();
 
-    // 5. Create FreeRTOS Tasks
+    // 5. Initialize Bluetooth LE Service
+    Serial.println("[BOOT] Initializing Bluetooth LE Service...");
+    BluetoothManager::instance().init();
+
+    // 6. Create FreeRTOS Tasks
     Serial.println("[BOOT] Spawning FreeRTOS tasks...");
     xTaskCreatePinnedToCore(
         taskGUI,

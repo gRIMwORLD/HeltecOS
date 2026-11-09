@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeltecOS | BLE Companion Dashboard</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #38bdf8;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --border: #334155;
+            --good: #4ade80;
+            --warn: #facc15;
+            --bad: #f87171;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 16px;
+        }
+        .container {
+            width: 100%;
+            max-width: 860px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .logo-badge {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #fff;
+            font-weight: 800;
+            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            letter-spacing: 1px;
+        }
+        h1 {
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn {
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:hover {
+            background: #0369a1;
+        }
+        .btn:disabled {
+            background: #334155;
+            cursor: not-allowed;
+            color: #64748b;
+        }
+        .btn-danger {
+            background: #e11d48;
+        }
+        .btn-danger:hover {
+            background: #be123c;
+        }
+        .btn-sec {
+            background: #334155;
+        }
+        .btn-sec:hover {
+            background: #475569;
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: #1e293b;
+            border: 1px solid var(--border);
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #64748b;
+        }
+        .dot.connected {
+            background: var(--good);
+            box-shadow: 0 0 8px var(--good);
+        }
+        .dot.advertising {
+            background: var(--warn);
+            box-shadow: 0 0 8px var(--warn);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent);
+        }
+        .card.card-temp::before { background: #f97316; }
+        .card.card-hum::before  { background: #06b6d4; }
+        .card.card-pres::before { background: #8b5cf6; }
+        .card.card-bat::before  { background: #10b981; }
+
+        .card-label {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-sub);
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .card-value {
+            font-size: 36px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 4px;
+        }
+        .card-unit {
+            font-size: 18px;
+            font-weight: 500;
+            color: var(--text-sub);
+            margin-left: 4px;
+        }
+        .card-subtext {
+            font-size: 13px;
+            color: var(--text-sub);
+            margin-top: 8px;
+        }
+
+        .actions-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .actions-title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .actions-btns {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .history-box {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #94a3b8;
+            max-height: 140px;
+            overflow-y: auto;
+        }
+        .history-entry {
+            line-height: 1.6;
+        }
+        .history-time {
+            color: #38bdf8;
+        }
+        
+        .alert-box {
+            background: #1e1b4b;
+            border: 1px solid #4338ca;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #c7d2fe;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="brand">
+                <span class="logo-badge">HELTECOS</span>
+                <h1>PC Bluetooth Companion</h1>
+            </div>
+            <div class="controls">
+                <div class="status-pill">
+                    <span class="dot" id="statusDot"></span>
+                    <span id="statusText">Disconnected</span>
+                </div>
+                <button class="btn" id="connectBtn" onclick="toggleConnect()">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2a1 1 0 0 1 1 1v7.086l3.5-3.5a1 1 0 1 1 1.414 1.414L13.414 12l4.5 4.5a1 1 0 0 1-1.414 1.414L13 14.414V21a1 1 0 1 1-2 0v-6.586l-3.5 3.5a1 1 0 0 1-1.414-1.414L10.586 12 6.086 7.5a1 1 0 0 1 1.414-1.414L11 9.586V3a1 1 0 0 1 1-1z"/></svg>
+                    Connect HeltecOS
+                </button>
+            </div>
+        </header>
+
+        <div class="alert-box" id="browserCheck" style="display:none;">
+            <span>⚠️ Web Bluetooth requires Chrome, Edge, or Opera with Bluetooth turned on in your OS.</span>
+        </div>
+
+        <main class="grid">
+            <!-- Temperature -->
+            <div class="card card-temp">
+                <div class="card-label">
+                    <span>Temperature</span>
+                    <span>🌡️</span>
+                </div>
+                <div class="card-value"><span id="valTemp">--.-</span><span class="card-unit">°C</span></div>
+                <div class="card-subtext" id="subTemp">BME280 Ambient Sensor</div>
+            </div>
+
+            <!-- Humidity -->
+            <div class="card card-hum">
+                <div class="card-label">
+                    <span>Relative Humidity</span>
+                    <span>💧</span>
+                </div>
+                <div class="card-value"><span id="valHum">--.-</span><span class="card-unit">%</span></div>
+                <div class="card-subtext" id="subHum">BME280 Precision Hygrometer</div>
+            </div>
+
+            <!-- Barometric Pressure -->
+            <div class="card card-pres">
+                <div class="card-label">
+                    <span>Barometric Pressure</span>
+                    <span>🧭</span>
+                </div>
+                <div class="card-value"><span id="valPres">----.-</span><span class="card-unit">hPa</span></div>
+                <div class="card-subtext" id="subPres">Calculated Altitude: <b id="valAlt">-- m</b></div>
+            </div>
+
+            <!-- Battery & Power -->
+            <div class="card card-bat">
+                <div class="card-label">
+                    <span>Battery Status</span>
+                    <span>🔋</span>
+                </div>
+                <div class="card-value"><span id="valBat">--</span><span class="card-unit">%</span></div>
+                <div class="card-subtext" id="subBat">-- V | -- mA</div>
+            </div>
+        </main>
+
+        <!-- Interactive Remote Controls -->
+        <section class="actions-panel">
+            <div>
+                <div class="actions-title">Remote Device Control</div>
+                <div style="font-size: 13px; color: var(--text-sub);">Zero security risk: Local authenticated BLE commands</div>
+            </div>
+            <div class="actions-btns">
+                <button class="btn btn-sec" id="btnOled" disabled onclick="sendCommand('oled')">Toggle OLED Screen</button>
+                <button class="btn btn-sec" id="btnLed" disabled onclick="sendCommand('led')">Toggle User LED</button>
+                <button class="btn btn-sec" id="btnNext" disabled onclick="sendCommand('screen_next')">Next OLED Page</button>
+            </div>
+        </section>
+
+        <!-- Live Activity Log -->
+        <section>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px;">ACTIVITY LOG</div>
+            <div class="history-box" id="logBox">
+                <div class="history-entry"><span class="history-time">[System]</span> Ready to connect via Bluetooth Low Energy.</div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const HELTECOS_SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const TELEMETRY_CHAR_UUID   = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+        const COMMAND_CHAR_UUID     = "beb5483f-36e1-4688-b7f5-ea07361b26a8";
+
+        let bleDevice = null;
+        let gattServer = null;
+        let telemetryChar = null;
+        let commandChar = null;
+
+        if (!navigator.bluetooth) {
+            document.getElementById('browserCheck').style.display = 'flex';
+            document.getElementById('connectBtn').disabled = true;
+        }
+
+        function log(msg) {
+            const box = document.getElementById('logBox');
+            const now = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = 'history-entry';
+            div.innerHTML = `<span class="history-time">[${now}]</span> ${msg}`;
+            box.prepend(div);
+        }
+
+        async function toggleConnect() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                disconnectDevice();
+            } else {
+                connectDevice();
+            }
+        }
+
+        async function connectDevice() {
+            try {
+                log("Scanning for 'HeltecOS' BLE device...");
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'HeltecOS' }],
+                    optionalServices: [HELTECOS_SERVICE_UUID]
+                });
+
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                log(`Found ${bleDevice.name}. Connecting to GATT server...`);
+                gattServer = await bleDevice.gatt.connect();
+
+                log("Acquiring Telemetry & Control service...");
+                const service = await gattServer.getPrimaryService(HELTECOS_SERVICE_UUID);
+
+                telemetryChar = await service.getCharacteristic(TELEMETRY_CHAR_UUID);
+                commandChar   = await service.getCharacteristic(COMMAND_CHAR_UUID);
+
+                log("Subscribing to real-time telemetry notifications...");
+                await telemetryChar.startNotifications();
+                telemetryChar.addEventListener('characteristicvaluechanged', handleTelemetry);
+
+                // Enable buttons
+                document.getElementById('statusDot').className = 'dot connected';
+                document.getElementById('statusText').innerText = 'Connected (GATT)';
+                document.getElementById('connectBtn').innerText = 'Disconnect';
+                document.getElementById('connectBtn').className = 'btn btn-danger';
+                document.getElementById('btnOled').disabled = false;
+                document.getElementById('btnLed').disabled = false;
+                document.getElementById('btnNext').disabled = false;
+
+                log("Connected successfully! Streaming live sensor telemetry.");
+
+            } catch (err) {
+                log(`Connection error: ${err.message || err}`);
+            }
+        }
+
+        function handleTelemetry(event) {
+            const dataView = event.target.value;
+            // 24-byte binary payload:
+            // float temp_c (0)
+            // float humidity (4)
+            // float pressure (8)
+            // float vbat (12)
+            // int16 current_ma (16)
+            // uint8 battery_pct (18)
+            // uint8 flags (19)
+            // uint32 uptime (20)
+
+            if (dataView.byteLength < 24) return;
+
+            const temp = dataView.getFloat32(0, true);
+            const hum  = dataView.getFloat32(4, true);
+            const pres = dataView.getFloat32(8, true);
+            const vbat = dataView.getFloat32(12, true);
+            const ma   = dataView.getInt16(16, true);
+            const batPct = dataView.getUint8(18);
+            const flags  = dataView.getUint8(19);
+
+            const isCharging = (flags & (1 << 0)) !== 0;
+            const isFull     = (flags & (1 << 1)) !== 0;
+            const isUsb      = (flags & (1 << 2)) !== 0;
+            const oledOn     = (flags & (1 << 3)) !== 0;
+
+            // Update DOM
+            document.getElementById('valTemp').innerText = temp.toFixed(1);
+            document.getElementById('valHum').innerText  = hum.toFixed(1);
+            document.getElementById('valPres').innerText = pres.toFixed(1);
+
+            // Barometric Altitude approximation: 44330 * (1 - (P / 1013.25)^(1/5.255))
+            const alt = 44330.0 * (1.0 - Math.pow(pres / 1013.25, 0.1903));
+            document.getElementById('valAlt').innerText = alt.toFixed(0) + ' m';
+
+            document.getElementById('valBat').innerText = batPct;
+
+            let batStateText = `${vbat.toFixed(2)}V | ${ma >= 0 ? '+' : ''}${ma}mA`;
+            if (isFull) {
+                batStateText += " (Fully Charged)";
+            } else if (isCharging) {
+                batStateText += " (Charging)";
+            } else {
+                batStateText += " (Discharging)";
+            }
+            document.getElementById('subBat').innerText = batStateText;
+        }
+
+        async function sendCommand(cmd) {
+            if (!commandChar) return;
+            try {
+                const encoder = new TextEncoder();
+                await commandChar.writeValue(encoder.encode(cmd));
+                log(`Sent command: "${cmd}"`);
+            } catch (err) {
+                log(`Failed to send command: ${err}`);
+            }
+        }
+
+        function onDisconnected() {
+            log("Device disconnected.");
+            document.getElementById('statusDot').className = 'dot';
+            document.getElementById('statusText').innerText = 'Disconnected';
+            document.getElementById('connectBtn').innerText = 'Connect HeltecOS';
+            document.getElementById('connectBtn').className = 'btn';
+            document.getElementById('btnOled').disabled = true;
+            document.getElementById('btnLed').disabled = true;
+            document.getElementById('btnNext').disabled = true;
+        }
+
+        function disconnectDevice() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+        }
+    </script>
+</body>
+</html>
