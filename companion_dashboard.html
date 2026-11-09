@@ -382,6 +382,14 @@
                 await telemetryChar.startNotifications();
                 telemetryChar.addEventListener('characteristicvaluechanged', handleTelemetry);
 
+                // Perform immediate read to populate dashboard without waiting for first notification
+                try {
+                    const initialValue = await telemetryChar.readValue();
+                    handleTelemetry({ target: { value: initialValue } });
+                } catch (readErr) {
+                    console.warn("Initial read warning:", readErr);
+                }
+
                 // Enable buttons
                 document.getElementById('statusDot').className = 'dot connected';
                 document.getElementById('statusText').innerText = 'Connected (GATT)';

@@ -27,7 +27,9 @@ void BluetoothManager::init() {
         TELEMETRY_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    pTelemetryChar->addDescriptor(new BLE2902());
+    BLE2902* pDesc = new BLE2902();
+    pDesc->setNotifications(true);
+    pTelemetryChar->addDescriptor(pDesc);
 
     // 5. Create Command Characteristic (Write - e.g. toggle OLED, reboot, LED)
     pCommandChar = pService->createCharacteristic(
@@ -39,12 +41,10 @@ void BluetoothManager::init() {
     // Start service
     pService->start();
 
-    // 6. Set up Advertising (Hybrid Broadcast: Name + Service UUID)
+    // 6. Set up Advertising
     pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(HELTECOS_SERVICE_UUID);
     pAdvertising->setScanResponse(true);
-    pAdvertising->setMinPreferred(0x06); // Functions that help with iPhone/PC connection speed
-    pAdvertising->setMinPreferred(0x12);
 
     BLEDevice::startAdvertising();
     Serial.println("[BLE] Bluetooth Low Energy service advertising as 'HeltecOS'");
