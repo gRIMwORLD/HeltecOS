@@ -1,5 +1,6 @@
 #include "board_hal.h"
 #include "driver/gpio.h"
+#include "esp_mac.h"
 #include <WiFi.h>
 
 BoardHAL& BoardHAL::instance() {
@@ -442,4 +443,16 @@ void BoardHAL::setTempOffset(float offset) {
 
 float BoardHAL::getTempOffset() const {
     return temp_offset;
+}
+
+String BoardHAL::getDeviceId() const {
+    uint64_t chipmac = ESP.getEfuseMac();
+    uint16_t id = (uint16_t)(chipmac >> 32);
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%04X", id);
+    return String(buf);
+}
+
+String BoardHAL::getDeviceName() const {
+    return "HeltecOS-" + getDeviceId();
 }

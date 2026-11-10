@@ -12,8 +12,9 @@ BluetoothManager::BluetoothManager()
 }
 
 void BluetoothManager::init() {
-    // 1. Initialize BLE Device with custom name
-    BLEDevice::init("HeltecOS");
+    // 1. Initialize BLE Device with unique hardware-derived name
+    String devName = BoardHAL::instance().getDeviceName();
+    BLEDevice::init(devName);
 
     // Maximize Bluetooth RF Transmission Power to +9dBm (ESP_PWR_LVL_P9)
     BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
@@ -52,13 +53,13 @@ void BluetoothManager::init() {
     pAdvertising->setScanResponse(true);
 
     BLEAdvertisementData advData;
-    advData.setName("HeltecOS");
+    advData.setName(devName);
     advData.setFlags(0x06); // General Discoverable + BR/EDR Not Supported (BLE Only)
     advData.setCompleteServices(BLEUUID(HELTECOS_SERVICE_UUID));
     pAdvertising->setAdvertisementData(advData);
 
     BLEDevice::startAdvertising();
-    Serial.println("[BLE] Bluetooth Low Energy service advertising as 'HeltecOS'");
+    Serial.printf("[BLE] Bluetooth Low Energy service advertising as '%s'\n", devName.c_str());
 }
 
 void BluetoothManager::onConnect(BLEServer* pServer) {

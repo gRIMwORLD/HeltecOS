@@ -80,6 +80,10 @@ public:
     // I2C wire for external sensor
     TwoWire& getSensorWire();
 
+    // Board identity
+    String getDeviceId() const;
+    String getDeviceName() const;
+
 private:
     BoardHAL();
     void initBattery();

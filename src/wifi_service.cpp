@@ -234,9 +234,13 @@ void WifiService::setupWebServer() {
     static bool server_started = false;
     if (server_started) return;
 
-    // mDNS http://heltecos.local
-    if (MDNS.begin("heltecos")) {
-        Serial.println("[WIFI] mDNS responder started: http://heltecos.local");
+    // mDNS with unique hardware hostname (e.g. heltecos-f978.local and generic heltecos.local)
+    String mdnsName = "heltecos-" + BoardHAL::instance().getDeviceId();
+    mdnsName.toLowerCase();
+
+    if (MDNS.begin(mdnsName.c_str())) {
+        MDNS.addService("http", "tcp", 80);
+        Serial.printf("[WIFI] mDNS responder started: http://%s.local\n", mdnsName.c_str());
     }
 
     server.on("/", HTTP_GET, [this]() { handleRoot(); });
@@ -256,12 +260,14 @@ void WifiService::handleRoot() {
 void WifiService::handleApiTelemetry() {
     const TelemetryData& t = BoardHAL::instance().getTelemetry();
 
-    char json[416];
+    char json[448];
     snprintf(json, sizeof(json),
-        "{\"temp_c\":%.2f,\"humidity\":%.2f,\"pressure\":%.2f,\"altitude\":%.1f,"
+        "{\"device_id\":\"%s\",\"device_name\":\"%s\",\"temp_c\":%.2f,\"humidity\":%.2f,\"pressure\":%.2f,\"altitude\":%.1f,"
         "\"battery_v\":%.2f,\"battery_pct\":%d,\"charging\":%s,\"full\":%s,\"usb\":%s,"
         "\"oled_on\":%s,\"current_ma\":%.1f,\"power_mw\":%.1f,\"hours_rem\":%.1f,"
         "\"free_heap\":%lu,\"ssid\":\"%s\",\"time\":\"%s\"}",
+        BoardHAL::instance().getDeviceId().c_str(),
+        BoardHAL::instance().getDeviceName().c_str(),
         t.temperature_c, t.humidity_pct, t.pressure_hpa, t.altitude_m,
         t.vbat_volts, t.battery_pct,
         t.is_charging ? "true" : "false",
